@@ -15,7 +15,12 @@ let winsInLevel = 0;
 const MAX_LEVEL = 24; // 12 levels to grow canvas, 12 levels to shrink field of vision
 const WINS_PER_LEVEL = 5;
 let fieldOfVision = 1200; // Starts at 1200x1200 when canvas reaches max size
+let maskEnabled = true; // Toggle for field of view mask (only for testing)
+let cameraOffset = { x: 0, y: 0 }; // Camera offset to follow the player
 
+/**
+ * Initialize the maze grid with walls on all sides.
+ */
 function initMaze() {
     maze = new Array(COLS);
     for (let i = 0; i < COLS; i++) {
@@ -26,6 +31,11 @@ function initMaze() {
     }
 }
 
+/**
+ * Recursively carve passages in the maze using Depth-First Search.
+ * @param {number} x - Current cell's x-coordinate.
+ * @param {number} y - Current cell's y-coordinate.
+ */
 function carvePassage(x, y) {
     maze[x][y].visited = true;
 
@@ -50,93 +60,166 @@ function carvePassage(x, y) {
     }
 }
 
+/**
+ * Update the camera offset to center the player on the screen.
+ */
+function updateCamera() {
+    const playerX = player.x * CELL_SIZE + CELL_SIZE / 2;
+    const playerY = player.y * CELL_SIZE + CELL_SIZE / 2;
+    cameraOffset.x = playerX - canvas.width / 2;
+    cameraOffset.y = playerY - canvas.height / 2;
+}
+
+/**
+ * Draw the maze, player, and exit on the canvas.
+ */
 function drawMaze() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
 
+    // Update camera to follow the player
+    updateCamera();
+
     // Calculate visible area based on field of vision (only for levels 13+)
-    let halfVision = fieldOfVision - 100;
+    let halfVision = fieldOfVision / 2;
     if (level < 13) {
         halfVision = canvas.width; // Full visibility for levels 1-12
     }
 
-    const startX = Math.max(0, player.x * CELL_SIZE - halfVision);
-    const startY = Math.max(0, player.y * CELL_SIZE - halfVision);
-    const endX = Math.min(canvas.width, player.x * CELL_SIZE + halfVision);
-    const endY = Math.min(canvas.height, player.y * CELL_SIZE + halfVision);
+    const startX = Math.max(0, player.x * CELL_SIZE - halfVision - cameraOffset.x);
+    const startY = Math.max(0, player.y * CELL_SIZE - halfVision - cameraOffset.y);
+    const endX = Math.min(canvas.width, player.x * CELL_SIZE + halfVision - cameraOffset.x);
+    const endY = Math.min(canvas.height, player.y * CELL_SIZE + halfVision - cameraOffset.y);
 
     // Draw only the visible area with a 10px feather (only for levels 13+)
-    if (level >= 13) {
+    if (level >= 13 && maskEnabled) {
         ctx.save();
         ctx.beginPath();
         ctx.rect(startX, startY, endX - startX, endY - startY);
         ctx.clip();
 
-        // Add feather effect to the edges of the visible area
-        const featherSize = 10;
-        const gradient = ctx.createRadialGradient(
-            player.x * CELL_SIZE + CELL_SIZE / 2,
-            player.y * CELL_SIZE + CELL_SIZE / 2,
-            halfVision + featherSize,
-            player.x * CELL_SIZE + CELL_SIZE / 2,
-            player.y * CELL_SIZE + CELL_SIZE / 2,
-            halfVision
+        // Draw the maze
+        for (let x = 0; x < COLS; x++) {
+            for (let y = 0; y < ROWS; y++) {
+                const cell = maze[x][y];
+                const xPos = x * CELL_SIZE - cameraOffset.x;
+                const yPos = y * CELL_SIZE - cameraOffset.y;
+
+                if (cell.top) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, yPos);
+                    ctx.lineTo(xPos + CELL_SIZE, yPos);
+                    ctx.stroke();
+                }
+                if (cell.right) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos + CELL_SIZE, yPos);
+                    ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
+                    ctx.stroke();
+                }
+                if (cell.bottom) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, yPos + CELL_SIZE);
+                    ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
+                    ctx.stroke();
+                }
+                if (cell.left) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, yPos);
+                    ctx.lineTo(xPos, yPos + CELL_SIZE);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Draw player
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(
+            player.x * CELL_SIZE - cameraOffset.x + 2,
+            player.y * CELL_SIZE - cameraOffset.y + 2,
+            CELL_SIZE - 4,
+            CELL_SIZE - 4
         );
-        gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.restore();
+
+        // Add feather effect to the edges of the visible area
+        const gradient = ctx.createRadialGradient(
+            player.x * CELL_SIZE - cameraOffset.x + CELL_SIZE / 2,
+            player.y * CELL_SIZE - cameraOffset.y + CELL_SIZE / 2,
+            halfVision - 10, // Start gradient 10px inside the edge
+            player.x * CELL_SIZE - cameraOffset.x + CELL_SIZE / 2,
+            player.y * CELL_SIZE - cameraOffset.y + CELL_SIZE / 2,
+            halfVision // End gradient at the edge
+        );
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 0)'); // Transparent at the center
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 1)'); // Opaque at the edge
 
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    } else {
+        // Draw the maze without clipping for levels 1-12 or when mask is disabled
+        for (let x = 0; x < COLS; x++) {
+            for (let y = 0; y < ROWS; y++) {
+                const cell = maze[x][y];
+                const xPos = x * CELL_SIZE - cameraOffset.x;
+                const yPos = y * CELL_SIZE - cameraOffset.y;
 
-    // Draw maze
-    for (let x = 0; x < COLS; x++) {
-        for (let y = 0; y < ROWS; y++) {
-            const cell = maze[x][y];
-            const xPos = x * CELL_SIZE;
-            const yPos = y * CELL_SIZE;
-
-            if (cell.top) {
-                ctx.beginPath();
-                ctx.moveTo(xPos, yPos);
-                ctx.lineTo(xPos + CELL_SIZE, yPos);
-                ctx.stroke();
-            }
-            if (cell.right) {
-                ctx.beginPath();
-                ctx.moveTo(xPos + CELL_SIZE, yPos);
-                ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
-                ctx.stroke();
-            }
-            if (cell.bottom) {
-                ctx.beginPath();
-                ctx.moveTo(xPos, yPos + CELL_SIZE);
-                ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
-                ctx.stroke();
-            }
-            if (cell.left) {
-                ctx.beginPath();
-                ctx.moveTo(xPos, yPos);
-                ctx.lineTo(xPos, yPos + CELL_SIZE);
-                ctx.stroke();
+                if (cell.top) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, yPos);
+                    ctx.lineTo(xPos + CELL_SIZE, yPos);
+                    ctx.stroke();
+                }
+                if (cell.right) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos + CELL_SIZE, yPos);
+                    ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
+                    ctx.stroke();
+                }
+                if (cell.bottom) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, yPos + CELL_SIZE);
+                    ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
+                    ctx.stroke();
+                }
+                if (cell.left) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, yPos);
+                    ctx.lineTo(xPos, yPos + CELL_SIZE);
+                    ctx.stroke();
+                }
             }
         }
+
+        // Draw player
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(
+            player.x * CELL_SIZE - cameraOffset.x + 2,
+            player.y * CELL_SIZE - cameraOffset.y + 2,
+            CELL_SIZE - 4,
+            CELL_SIZE - 4
+        );
     }
 
-    // Draw player
-    ctx.fillStyle = '#0f0';
-    ctx.fillRect(player.x * CELL_SIZE + 2, player.y * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-
-    // Draw exit (always visible)
+    // Draw exit (always visible, on top of everything)
     ctx.fillStyle = (level === MAX_LEVEL && subLevel === WINS_PER_LEVEL) ? '#ff0' : '#f00'; // Yellow for final level
-    ctx.fillRect(exit.x * CELL_SIZE + 2, exit.y * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-
-    if (level >= 13) {
-        ctx.restore();
-    }
+    ctx.fillRect(
+        exit.x * CELL_SIZE - cameraOffset.x + 2,
+        exit.y * CELL_SIZE - cameraOffset.y + 2,
+        CELL_SIZE - 4,
+        CELL_SIZE - 4
+    );
 }
 
+/**
+ * Check if the player can move in the specified direction.
+ * @param {number} x - Player's x-coordinate.
+ * @param {number} y - Player's y-coordinate.
+ * @param {string} dir - Direction to move ('up', 'down', 'left', 'right').
+ * @returns {boolean} - True if the player can move, false otherwise.
+ */
 function canMove(x, y, dir) {
     const cell = maze[x][y];
     if (dir === 'up' && !cell.top) return true;
@@ -146,6 +229,10 @@ function canMove(x, y, dir) {
     return false;
 }
 
+/**
+ * Move the player in the specified direction.
+ * @param {string} dir - Direction to move ('up', 'down', 'left', 'right').
+ */
 function movePlayer(dir) {
     let nx = player.x;
     let ny = player.y;
@@ -187,8 +274,12 @@ function movePlayer(dir) {
         }
         generateMaze();
     }
+    drawMaze(); // Redraw the maze after moving the player
 }
 
+/**
+ * Generate a new maze and reset player and exit positions.
+ */
 function generateMaze() {
     COLS = Math.floor(canvas.width / CELL_SIZE);
     ROWS = Math.floor(canvas.height / CELL_SIZE);
@@ -201,6 +292,9 @@ function generateMaze() {
     drawMaze();
 }
 
+/**
+ * Restart the game from Level 1-1.
+ */
 function restartGame() {
     level = 1;
     subLevel = 1;
@@ -215,6 +309,9 @@ function restartGame() {
     generateMaze();
 }
 
+/**
+ * Jump to a specific level and sub-level.
+ */
 function jumpToLevel() {
     const levelInput = document.getElementById('levelInput');
     const subLevelInput = document.getElementById('subLevelInput');
@@ -244,6 +341,14 @@ function jumpToLevel() {
     }
 }
 
+/**
+ * Toggle the field of view mask on and off (for testing).
+ */
+function toggleMask() {
+    maskEnabled = !maskEnabled;
+    drawMaze();
+}
+
 // Swipe controls for mobile
 let touchStartX = 0;
 let touchStartY = 0;
@@ -266,15 +371,23 @@ canvas.addEventListener('touchend', (e) => {
         if (dy > 0) movePlayer('down');
         else movePlayer('up');
     }
-    drawMaze();
 });
 
+// Keyboard controls
 document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowUp') movePlayer('up');
     if (e.key === 'ArrowDown') movePlayer('down');
     if (e.key === 'ArrowLeft') movePlayer('left');
     if (e.key === 'ArrowRight') movePlayer('right');
+});
+
+// Handle window resize
+window.addEventListener('resize', () => {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    CELL_SIZE = Math.min(canvas.width / COLS, canvas.height / ROWS);
     drawMaze();
 });
 
+// Initialize the game
 generateMaze();
