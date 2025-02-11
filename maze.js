@@ -3,6 +3,7 @@ const ctx = canvas.getContext('2d');
 const levelDisplay = document.getElementById('level');
 const gameOverDisplay = document.getElementById('gameOver');
 const playAgainButton = document.getElementById('playAgain');
+const gameDisplay = document.getElementById('gameDisplay');
 
 let CELL_SIZE = 20;
 let COLS, ROWS;
@@ -62,13 +63,36 @@ function carvePassage(x, y) {
 
 /**
  * Update the camera offset to center the player on the screen.
+ * ORIGINAL FUNCTION
  */
+// function updateCamera() {
+//     const playerX = player.x * CELL_SIZE + CELL_SIZE / 2;
+//     const playerY = player.y * CELL_SIZE + CELL_SIZE / 2;
+//     cameraOffset.x = playerX - canvas.width / 2;
+//     cameraOffset.y = playerY - canvas.height / 2;
+// }
+
+
 function updateCamera() {
-    const playerX = player.x * CELL_SIZE + CELL_SIZE / 2;
-    const playerY = player.y * CELL_SIZE + CELL_SIZE / 2;
-    cameraOffset.x = playerX - canvas.width / 2;
-    cameraOffset.y = playerY - canvas.height / 2;
+    const gameDisplay = document.getElementById('gameDisplay'); // Get the gameDisplay div
+    const gameDisplayWidth = gameDisplay.clientWidth; // Get the width of gameDisplay
+    const gameDisplayHeight = gameDisplay.clientHeight; // Get the height of gameDisplay
+
+    // Only update the camera if the canvas is larger than the gameDisplay
+    if (canvas.width > gameDisplayWidth || canvas.height > gameDisplayHeight) {
+        const playerX = player.x * CELL_SIZE + CELL_SIZE / 2;
+        const playerY = player.y * CELL_SIZE + CELL_SIZE / 2;
+
+        // Calculate the camera offset to center the player
+        cameraOffset.x = playerX - canvas.width / 2;
+        cameraOffset.y = playerY - canvas.height / 2;
+    } else {
+        // If the canvas is smaller than or equal to the gameDisplay, reset the camera offset
+        cameraOffset.x = 0;
+        cameraOffset.y = 0;
+    }
 }
+
 
 /**
  * Draw the maze, player, and exit on the canvas.
@@ -285,10 +309,32 @@ function generateMaze() {
     ROWS = Math.floor(canvas.height / CELL_SIZE);
     initMaze();
     carvePassage(0, 0);
-    player.x = 0;
-    player.y = 0;
-    exit.x = COLS - 1;
-    exit.y = ROWS - 1;
+
+    // Set player position to the center of the maze
+    player.x = Math.floor(COLS / 2);
+    player.y = Math.floor(ROWS / 2);
+
+    // Randomly place the exit at one of the edges of the maze
+    const edge = Math.floor(Math.random() * 4); // 0: top, 1: right, 2: bottom, 3: left
+    switch (edge) {
+        case 0: // Top edge
+            exit.x = Math.floor(Math.random() * COLS);
+            exit.y = 0;
+            break;
+        case 1: // Right edge
+            exit.x = COLS - 1;
+            exit.y = Math.floor(Math.random() * ROWS);
+            break;
+        case 2: // Bottom edge
+            exit.x = Math.floor(Math.random() * COLS);
+            exit.y = ROWS - 1;
+            break;
+        case 3: // Left edge
+            exit.x = 0;
+            exit.y = Math.floor(Math.random() * ROWS);
+            break;
+    }
+
     drawMaze();
 }
 
