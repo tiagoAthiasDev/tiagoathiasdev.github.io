@@ -15,14 +15,17 @@
             flex-direction: column;
         }
         #gameDisplay {
-            width: 1250px;
-            height: 1250px;
+            width: 80vw; /* 80% of the viewport width */
+            height: 80vh; /* 80% of the viewport height */
+            max-width: 100%; /* Ensure it doesn't overflow */
+            max-height: 100%;
             border: 2px solid gold;
             border-radius: 20px;
             display: flex;
             justify-content: center;
             align-items: center;
             background-color: #000;
+            overflow: hidden; /* Prevent canvas from overflowing */
         }
         #level {
             text-align: center;
@@ -48,6 +51,26 @@
             font-size: 24px;
             cursor: pointer;
         }
+        #controls {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        #controls button {
+            font-size: 24px;
+            padding: 10px 20px;
+            margin: 5px;
+        }
+        @media (max-width: 600px) {
+            #gameDisplay {
+                width: 95vw;
+                height: 95vh;
+            }
+            #controls button {
+                font-size: 18px;
+                padding: 5px 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -58,7 +81,13 @@
         <button onclick="jumpToLevel()">Jump to Level</button>
     </div>
     <div id="gameDisplay">
-        <canvas id="mazeCanvas" width="100" height="100"></canvas>
+        <canvas id="mazeCanvas"></canvas>
+    </div>
+    <div id="controls">
+        <button onclick="movePlayer('up')">↑</button>
+        <button onclick="movePlayer('down')">↓</button>
+        <button onclick="movePlayer('left')">←</button>
+        <button onclick="movePlayer('right')">→</button>
     </div>
     <div id="gameOver">Game Over!</div>
     <button id="playAgain" onclick="restartGame()">Play Again</button>
